@@ -9,7 +9,7 @@
 <link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
 <link rel="manifest" href="manifest.webmanifest">
 <meta name="theme-color" content="#14231F">
-<meta name="ite-version" content="2026-11-23b">
+<meta name="ite-version" content="2026-11-23c">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -32,9 +32,9 @@
 <script>
   // No password is stored here. After sign-in the app sends back a session code.
   // It stays valid while the app is open; once the app has been closed or in the
-  // background for more than 60 seconds, the user has to sign in again.
+  // background for more than 15 minutes, the user has to sign in again.
   var APP = 'https://script.google.com/macros/s/AKfycbwYhgOuitJqCIDAZw8RUjCiD6fca2SYfjvanvExoGrtLOoOmDrpJWmQ5UOgDfWB7YcrjA/exec';
-  var TTL = 60 * 1000;
+  var TTL = 15 * 60 * 1000;
   function ls(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} return null; }
   function touch() { if (ls('ite_t')) ls('ite_seen', String(Date.now())); }
   function expired() { return Date.now() - Number(ls('ite_seen') || 0) > TTL; }

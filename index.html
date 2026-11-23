@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>ITE Congo | Business Overview</title>
+<title>ITE Congo | Business Platform</title>
 <link rel="icon" type="image/png" sizes="32x32" href="icon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
@@ -15,18 +15,20 @@
 <meta name="apple-mobile-web-app-title" content="ITE Congo">
 <style>
   html, body { margin: 0; height: 100%; background: #14231F; font-family: system-ui, sans-serif; color: #CFE7DD; }
-  iframe { display: block; border: 0; width: 100%; height: 100%; }
+  body { box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+  iframe { display: block; border: 0; width: 100%; flex: 1; min-height: 0; }
 </style>
 </head>
 <body>
 <script>
-  // No password or key is stored in this page. After sign-in, the app sends back a
-  // session code that this device keeps for 30 days, so the home-screen icon opens directly.
+  // No password is stored here. After sign-in the app sends back a session code that is kept
+  // only while the app stays open (sessionStorage): closing the app signs the user out.
   var APP = 'https://script.google.com/macros/s/AKfycbwYhgOuitJqCIDAZw8RUjCiD6fca2SYfjvanvExoGrtLOoOmDrpJWmQ5UOgDfWB7YcrjA/exec';
   var t = null;
-  try { localStorage.removeItem('ite_k'); t = localStorage.getItem('ite_t'); } catch (e) {}
+  try { localStorage.removeItem('ite_k'); localStorage.removeItem('ite_t'); t = sessionStorage.getItem('ite_t'); } catch (e) {}
   var f = document.createElement('iframe');
-  f.title = 'ITE Congo | Business Overview';
+  f.title = 'ITE Congo | Business Platform';
   f.src = APP + (t ? '?t=' + encodeURIComponent(t) : '');
   document.body.appendChild(f);
   if (location.search) history.replaceState(null, '', location.pathname);
@@ -34,7 +36,7 @@
     var h = ''; try { h = new URL(e.origin).hostname; } catch (x) { return; }
     if (!/\.googleusercontent\.com$/.test(h) && h !== 'script.google.com') return;
     if (e.data && typeof e.data.iteToken === 'string') {
-      try { e.data.iteToken ? localStorage.setItem('ite_t', e.data.iteToken) : localStorage.removeItem('ite_t'); } catch (x) {}
+      try { e.data.iteToken ? sessionStorage.setItem('ite_t', e.data.iteToken) : sessionStorage.removeItem('ite_t'); } catch (x) {}
     }
   });
 </script>

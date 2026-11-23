@@ -14,30 +14,52 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="ITE Congo">
 <style>
-  html, body { margin: 0; height: 100%; background: #14231F; font-family: system-ui, sans-serif; color: #CFE7DD; }
-  body { box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden;
+  :root { --bot: #14231F; }
+  html, body { margin: 0; height: 100%; font-family: system-ui, sans-serif; color: #CFE7DD; }
+  /* Top strip (status bar) stays dark like the header; bottom strip follows the page colour. */
+  html { background: linear-gradient(to bottom, #14231F 50%, var(--bot) 50%); }
+  body { box-sizing: border-box; display: flex; flex-direction: column; overflow: hidden; background: transparent;
     padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
   iframe { display: block; border: 0; width: 100%; flex: 1; min-height: 0; }
 </style>
 </head>
 <body>
 <script>
-  // No password is stored here. After sign-in the app sends back a session code that is kept
-  // only while the app stays open (sessionStorage): closing the app signs the user out.
+  // No password is stored here. After sign-in the app sends back a session code.
+  // It stays valid while the app is open; once the app has been closed or in the
+  // background for more than 60 seconds, the user has to sign in again.
   var APP = 'https://script.google.com/macros/s/AKfycbwYhgOuitJqCIDAZw8RUjCiD6fca2SYfjvanvExoGrtLOoOmDrpJWmQ5UOgDfWB7YcrjA/exec';
-  var t = null;
-  try { localStorage.removeItem('ite_k'); localStorage.removeItem('ite_t'); t = sessionStorage.getItem('ite_t'); } catch (e) {}
+  var TTL = 60 * 1000;
+  function ls(k, v) { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} return null; }
+  function touch() { if (ls('ite_t')) ls('ite_seen', String(Date.now())); }
+  function expired() { return Date.now() - Number(ls('ite_seen') || 0) > TTL; }
+  function clearTok() { ls('ite_t', null); ls('ite_seen', null); }
+
+  ls('ite_k', null);
+  try { sessionStorage.removeItem('ite_t'); } catch (e) {}
+  if (ls('ite_t') && expired()) clearTok();
+  var t = ls('ite_t');
+  touch();
+
   var f = document.createElement('iframe');
   f.title = 'ITE Congo | Business Platform';
   f.src = APP + (t ? '?t=' + encodeURIComponent(t) : '');
   document.body.appendChild(f);
   if (location.search) history.replaceState(null, '', location.pathname);
+
+  setInterval(function () { if (!document.hidden) touch(); }, 5000);
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { touch(); return; }
+    if (ls('ite_t') && expired()) { clearTok(); location.reload(); } else touch();
+  });
+  window.addEventListener('pagehide', touch);
+
   window.addEventListener('message', function (e) {
     var h = ''; try { h = new URL(e.origin).hostname; } catch (x) { return; }
     if (!/\.googleusercontent\.com$/.test(h) && h !== 'script.google.com') return;
-    if (e.data && typeof e.data.iteToken === 'string') {
-      try { e.data.iteToken ? sessionStorage.setItem('ite_t', e.data.iteToken) : sessionStorage.removeItem('ite_t'); } catch (x) {}
-    }
+    var d = e.data || {};
+    if (typeof d.iteToken === 'string') { if (d.iteToken) { ls('ite_t', d.iteToken); touch(); } else clearTok(); }
+    if (typeof d.iteBg === 'string' && /^(rgb|#)[\w\s(),.#]*$/.test(d.iteBg)) document.documentElement.style.setProperty('--bot', d.iteBg);
   });
 </script>
 </body>

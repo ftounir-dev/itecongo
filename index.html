@@ -65,7 +65,15 @@
     var d = e.data || {};
     if (typeof d.iteToken === 'string') { if (d.iteToken) { ls('ite_t', d.iteToken); touch(); } else clearTok(); }
     // Only accept a solid colour: a transparent value would let a white strip show at the bottom.
-    if (typeof d.iteBg === 'string' && /^(rgb\(|#)[\d\s,.#a-fA-F]*\)?$/.test(d.iteBg)) document.documentElement.style.setProperty('--bot', d.iteBg);
+    // A PDF built inside the app (e.g. the Master Plan): the app's frame may not download files, so the page does it.
+    if (d.itePdf instanceof ArrayBuffer && typeof d.name === 'string') {
+      var url = URL.createObjectURL(new Blob([d.itePdf], { type: 'application/pdf' }));
+      var a = document.createElement('a'); a.href = url; a.download = d.name.replace(/[\\/:*?"<>|]/g, '-');
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+      try { e.source.postMessage({ itePdfOk: true }, e.origin); } catch (x) {}
+    }
+    if (typeof d.iteBg === 'string' &&/^(rgb\(|#)[\d\s,.#a-fA-F]*\)?$/.test(d.iteBg)) document.documentElement.style.setProperty('--bot', d.iteBg);
   });
 </script>
 </body>

@@ -1,0 +1,71 @@
+
+// ===== WhatsApp agent: replies to messages sent to the ITE Congo number (Kapso webhook -> doPost) =====
+const waNb_ = (v, d) => v.toFixed(d).replace('.', ',');
+const waMo_ = v => v == null ? '–' : v <= 0.05 ? 'rupture' : waNb_(v, 1) + ' mois';
+function waSendTo_(to, text) { const c = waCfg_(); if (!c.key) throw new Error('KAPSO_API_KEY missing in Script properties');
+  const res = UrlFetchApp.fetch('https://api.kapso.ai/meta/whatsapp/v24.0/' + c.phone + '/messages', {
+    method: 'post', contentType: 'application/json', headers: { 'X-API-Key': c.key }, muteHttpExceptions: true,
+    payload: JSON.stringify({ messaging_product: 'whatsapp', recipient_type: 'individual', to: to, type: 'text', text: { body: String(text).slice(0, 4000), preview_url: false } }) });
+  return res.getResponseCode() + (res.getResponseCode() >= 300 ? ' ' + res.getContentText().slice(0, 300) : ''); }
+
+// Summary text, limited to the sections the person can see in the app.
+function waSummaryText_(all, acc) { const has = k => acc.indexOf(k) >= 0, L = ['*ITE Congo · Point du ' + Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'dd/MM/yyyy') + '*', ''];
+  if (has('banks')) L.push(waBanksText_(all), '');
+  if (has('suppliers')) L.push(waSupText_(all, 4), '');
+  if (has('stock')) { const S = waStockLow_(all); L.push('📦 *Stock < 1 mois* : ' + (S.length ? S.length + ' article(s)' : 'aucun')); S.slice(0, 8).forEach(x => L.push('• ' + x.name + ' : ' + waMo_(x.act))); L.push(''); }
+  const E = waEtaList_(all, 7, acc); if (E !== null) L.push(E, '');
+  if (has('fleet')) { const K = waTanks_(all); if (K.length) { L.push('⛽ *Cuves gasoil à vérifier*'); K.forEach(x => L.push('• ' + x.k.site + ' ' + x.k.name + (x.days > 3 ? ' : pas de saisie depuis ' + x.days + ' j' : '') + (x.pct != null && x.pct < 0.2 ? ' : ' + Math.round(x.pct * 100) + ' % restant' : ''))); } }
+  return L.join('\n').trim(); }
+function waBanksText_(all) { const B = waBanks_(all); if (!B) return '🏦 Banques : pas de données';
+  const L = ['🏦 *Banques*' + (B.asOf ? ' (' + B.asOf + ')' : ''), 'Position nette : XAF ' + waBig_(B.net)];
+  if (B.odLim) L.push('Découvert utilisé : XAF ' + waBig_(B.odUsed) + ' / ' + waBig_(B.odLim) + ' (' + Math.round(B.odUsed / B.odLim * 100) + ' %)');
+  if (B.chq) L.push('Chèques en compensation : ' + B.chq + ' · XAF ' + waBig_(B.chqAmt)); return L.join('\n'); }
+function waBanksDetail_(all) { const B = waBanks_(all); if (!B) return '🏦 Banques : pas de données';
+  const L = [waBanksText_(all), '']; B.list.forEach(x => L.push('• ' + x.name + ' : XAF ' + waBig_(x.bal) + (x.lim ? ' (découvert ' + waBig_(x.lim) + ')' : '') + (x.chq.length ? ' · ' + x.chq.length + ' chèque(s)' : ''))); return L.join('\n'); }
+function waSupText_(all, n) { const M = waMatured_(all), L = ['💳 *Fournisseurs échus* : XAF ' + waBig_(M.tot)];
+  (M.all || M.top).slice(0, n).forEach(x => L.push('• ' + x[0] + ' : ' + waBig_(x[1]))); return L.join('\n'); }
+function waEtaList_(all, days, acc) { const P = acc.indexOf('projects') >= 0, S = acc.indexOf('stock') >= 0; if (!P && !S) return null;
+  const E = (P ? waEtas_(all, days) : []).concat(S ? waStockEtas_(all, days) : []).sort((a, b) => a.d - b.d);
+  const L = ['🚢 *ETA ' + days + ' prochains jours* : ' + (E.length ? '' : 'aucune')];
+  E.forEach(x => L.push('• ' + waDay_(x.d) + ' ' + (x.src === 'stock' ? '📦 MP – ' + x.item + waQty_(x) : x.sup + ' – ' + x.item + (x.conf ? ' ✅ confirmée' : ''))));
+  return L.join('\n'); }
+function waFuelText_(all) { const f = all.fleet; if (!f || !f.tanks) return '⛽ Cuves : pas de données'; const t = waToday_(), L = ['⛽ *Cuves gasoil*'];
+  f.tanks.forEach(k => { const ld = waPd_(k.last), d = ld ? Math.round((t - ld) / 864e5) : null; if (d != null && d > 60) return;
+    L.push('• ' + k.site + ' ' + k.name + ' : ' + (k.theo != null && k.cap ? Math.round(k.theo / k.cap * 100) + ' %' : '–') + (d != null ? ' (saisie il y a ' + d + ' j)' : '')); });
+  if (L.length === 1) L.push('Aucune cuve active (saisie < 60 j).'); return L.join('\n'); }
+
+const WA_MENU = '🤖 *Agent ITE Congo* – envoyez un mot :\n• *point* – résumé du jour\n• *banques* – position par banque\n• *fournisseurs* – échus (top 10)\n• *stock* – articles < 1 mois\n• *eta* – arrivées des 14 prochains jours\n• *cuves* – niveaux gasoil\n• ou le *nom d’un fournisseur* (ex. Eskapet)';
+function waAnswer_(u, raw) { const acc = u.access || [], has = k => acc.indexOf(k) >= 0, no = '🔒 Cette section n’est pas ouverte pour votre profil.';
+  const q = String(raw || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim();
+  if (!q || /^(aide|help|menu|\?|bonjour|bonsoir|hi|hello|salut|start|hey)\b/.test(q)) return 'Bonjour ' + u.name + ' 👋\n\n' + WA_MENU;
+  const all = allData_();
+  if (/^(point|resume|summary|rapport|recap)/.test(q)) return waSummaryText_(all, acc);
+  if (/banq|bank|treso|decouvert|cheque/.test(q)) return has('banks') ? waBanksDetail_(all) : no;
+  if (/fournisseur|supplier|echu|dette|payable/.test(q)) return has('suppliers') ? waSupText_(all, 10) : no;
+  if (/^(stock|mp|matiere)/.test(q)) { if (!has('stock')) return no; const S = waStockLow_(all);
+    return ['📦 *Stock < 1 mois* : ' + (S.length ? S.length + ' article(s)' : 'aucun')].concat(S.map(x => '• ' + x.name + ' : ' + waMo_(x.act))).join('\n'); }
+  if (/eta|arriv|livraison|shipment|bateau|conteneur/.test(q)) { const E = waEtaList_(all, 14, acc); return E === null ? no : E; }
+  if (/cuve|gasoil|fuel|tank|carburant/.test(q)) return has('fleet') ? waFuelText_(all) : no;
+  if (has('suppliers') && q.length >= 3) { const by = {};
+    all.rows.filter(r => r[13] === 'Keep' && String(r[0]).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').indexOf(q) >= 0)
+      .forEach(r => { const k = r[0]; by[k] = by[k] || 0; by[k] += (r[9] || 0) * waFx_(all, r[4]); });
+    const K = Object.keys(by); if (K.length) return K.slice(0, 6).map(k => '💳 *' + k + '* : échu XAF ' + waBig_(by[k])).join('\n'); }
+  if (has('stock')) { const it = ((all.stock || {}).items || []).filter(x => x.name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').indexOf(q) >= 0).slice(0, 6);
+    if (it.length) return it.map(x => '📦 *' + x.name + '* : ' + waMo_(x.act) + (x.eta ? ' · prochaine arrivée ' + x.eta : '')).join('\n'); }
+  return 'Je n’ai pas compris « ' + String(raw).slice(0, 40) + ' ».\n\n' + WA_MENU; }
+
+function doPost(e) {
+  try { const b = JSON.parse(e.postData.contents || '{}'); (b.batch ? b.data || [] : [b]).forEach(waIncoming_); }
+  catch (err) { console.error('doPost ' + err); }
+  return ContentService.createTextOutput('ok'); }
+function waIncoming_(p) { const m = p && p.message; if (!m || !m.id) return;
+  if (m.kapso && m.kapso.direction && m.kapso.direction !== 'inbound') return;
+  const c = waCfg_(); if (p.phone_number_id && String(p.phone_number_id) !== String(c.phone)) return;
+  const lock = LockService.getScriptLock(); lock.waitLock(20000); const cache = CacheService.getScriptCache();
+  try { if (cache.get('wm_' + m.id)) return; cache.put('wm_' + m.id, '1', 21600); } finally { lock.releaseLock(); }
+  const from = waNum_(m.from || (p.conversation || {}).phone_number); if (!from) return;
+  const u = readUsersSheet_().find(x => x.active && x.phone && waNum_(x.phone) === from);
+  if (!u) { if (!cache.get('wx_' + from)) { cache.put('wx_' + from, '1', 21600); waSendTo_(from, 'Ce numéro n’est pas autorisé pour l’agent ITE Congo.'); } console.log('WA unknown ' + from); return; }
+  const text = (m.text && m.text.body) || (m.kapso && m.kapso.content) || '';
+  let ans; try { ans = waAnswer_(u, text); } catch (err) { ans = '⚠️ Erreur, réessayez dans un instant.'; console.error('waAnswer ' + err); }
+  console.log('WA ' + u.u + ' "' + String(text).slice(0, 60) + '" -> ' + waSendTo_(from, ans)); }

@@ -1,0 +1,23 @@
+// Bill of materials from the Nomenclatures tabs: "what preforms for 5 Lt water?", "nomenclature vival 1.5 lt".
+const waBN_ = s => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/(\d)[.,](\d)/g, '$1p$2').replace(/[^a-z0-9]+/g, ' ').trim();
+const WA_UNIT = { l: 'lt', litre: 'lt', litres: 'lt', liter: 'lt', liters: 'lt', ltr: 'lt', lts: 'lt', gr: 'g', grs: 'g', grams: 'g', gramme: 'g', grammes: 'g', ml: 'ml' };
+function waBom_(raw, acc) { if (acc.indexOf('stock') < 0) return null;
+  const Q = waBN_(raw).replace(/(\d)(lt|l|ml|g|gr|kg)\b/g, '$1 $2').split(' ').map(w => WA_UNIT[w] || w);
+  const nums = Q.filter(w => /^\d+(p\d+)?$/.test(w)), hintN = /nomenclature|recette|recipe|bom|composition|formule|formula/.test(Q.join(' '));
+  const tabs = waSheets_().filter(t => /^nomenclature/i.test(t.n)); if (!tabs.length) return null;
+  const hw = s => waBN_(s).split(' ').map(w => WA_UNIT[w] || w);
+  // Product columns whose header holds every number of the question (5 Lt -> "Vival / Bd 5 Lt"), plus as many other words as possible.
+  const cols = []; tabs.forEach(t => t.h.forEach((h, i) => { if (i < 2 || !h || /total/i.test(h)) return; const W = hw(h);
+    if (!nums.length || !nums.every(n => W.indexOf(n) >= 0)) return;
+    const sc = Q.filter(q => q.length >= 2 && W.indexOf(q) >= 0).length; cols.push({ t: t, i: i, h: h, sc: sc }); }));
+  if (!cols.length) return null;
+  const best = Math.max.apply(null, cols.map(c => c.sc)), C = cols.filter(c => c.sc === best).slice(0, 2);
+  const comp = waTokens_(raw).map(t => WA_SYN[t] || t).filter(t => t.length >= 4 && !/^\d/.test(t) && !/^(vival|water|eau|juice|jus|chips|vinegar|vinaigre|bidon|bottle|bouteille|nomenclature|recette|recipe|composition|for|pour)/.test(t));
+  const out = C.map(c => { const L = [];
+    c.t.r.forEach(r => { const name = String(r[0] || ''), v = parseFloat(String(r[c.i] || '').replace(/,/g, ''));
+      if (!name || !v || /max sales|total/i.test(name)) return;
+      if (comp.length && !comp.some(k => waN_(name).split(' ').some(w => w.indexOf(k) === 0))) return;
+      L.push('• ' + name + ' : ' + (+v.toFixed(5)).toLocaleString('en-US', { maximumFractionDigits: 5 }) + T_(' / unité', ' per unit')); });
+    if (!L.length && !hintN && !comp.length) return null;
+    return '🧾 *' + T_('Nomenclature – ', 'Bill of materials – ') + c.h + '* (' + c.t.n.replace(/^Nomenclatures_/, '') + ')\n' + (L.length ? L.join('\n') : T_('Aucun composant trouvé.', 'No matching component.')); }).filter(Boolean);
+  return out.length && (comp.length || hintN) ? out.join('\n\n') : null; }

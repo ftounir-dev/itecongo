@@ -1,0 +1,23 @@
+// Project deliveries (PPM sheet): find by supplier or equipment name, show readiness / ETD / ETA and stage.
+const WA_PPM_STOP = ' machine machines equipment equipement ligne line eta etas etd arrival arrivals arrive arrives arriving arrivee arrivees livraison delivery when quand date status statut where project projet projets projects ready readiness shipped shipping expedition ';
+function waFindPPM_(all, q) { const n = waN_(q), T = waTokens_(q).filter(t => WA_PPM_STOP.indexOf(' ' + t + ' ') < 0), P = (all.ppm || []).filter(r => r[13] !== 'Hide');
+  const pre = (txt, t) => waN_(txt).split(' ').some(w => w.length >= 3 && w.indexOf(t) === 0);
+  let hit = P.filter(r => { const s = waN_(r[0]); return s.length >= 3 && (' ' + n + ' ').indexOf(' ' + s + ' ') >= 0; });
+  if (!hit.length) hit = P.filter(r => T.some(t => t.length >= 4 && pre(r[0], t)));
+  if (!hit.length) hit = P.filter(r => T.some(t => t.length >= 4 && pre(r[1], t)));
+  return hit.slice(0, 5); }
+function waPPMDetail_(r) { const t = waToday_(), D = a => (a || []).filter(String), R = D(r[15]), E = D(r[16]), A = r[17] || [], M = r[18] || [], note = String(r[14] || '').trim();
+  const past = s => { const d = waPd_(s); return d && d <= t; };
+  const As = A.map((s, i) => s ? s + (M[i] ? T_(' ✅ confirmée', ' ✅ confirmed') : '') : '').filter(String);
+  let st = T_('Pas encore démarré', 'Not started');
+  if (/(^|\W)ite(\W|$)/i.test(note)) st = T_('✅ À ITE (livré)', '✅ At ITE (delivered)');
+  else if (A.some(s => past(s)) || /arriv/i.test(A.join(' '))) st = T_('📍 Arrivé', '📍 Arrived');
+  else if (E.some(s => past(s))) st = T_('🚢 Expédié – en transit', '🚢 Shipped – in transit');
+  else if (E.length) st = T_('📦 Prêt à expédier', '📦 Ready to ship');
+  else if (R.length) st = T_('🏭 En production', '🏭 In production');
+  const L = ['🏗️ *' + r[0] + '* – ' + r[1] + (r[3] ? ' (' + r[3] + ')' : ''), T_('Statut : ', 'Status: ') + st];
+  if (R.length) L.push(T_('Prêt (usine) : ', 'Readiness: ') + R.join(' / '));
+  if (E.length) L.push('ETD : ' + E.join(' / '));
+  L.push('ETA : ' + (As.length ? As.join(' / ') : T_('pas encore connue', 'not known yet')));
+  if (note && note !== '-') L.push(T_('Note : ', 'Note: ') + note);
+  return L.join('\n'); }

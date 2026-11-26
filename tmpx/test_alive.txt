@@ -1,0 +1,11 @@
+function waTestAlive() { const u = readUsersSheet_().find(x => x.u === 'raf'), all = allData_(true); WA_L = 'fr'; const L = [];
+  const T = q => { WA_DOC = null; WA_BTN = null; WA_LIST = null; WA_NEWCTX = {}; WA_L = waLang_(q) || 'fr'; let a; try { a = waAnswer_(u, q, {}); } catch (e) { a = 'ERR ' + e.stack; }
+    let cb = null; try { if (!WA_BTN && !WA_LIST && !WA_DOC) cb = waCtxButtons_(u.access); } catch (e) { cb = 'ERR ' + e; }
+    L.push('>> ' + q + '\n' + String(a).slice(0, 700) + (WA_DOC ? ' [DOC ' + (WA_DOC.getName ? WA_DOC.getName() + ' ' + WA_DOC.getBytes().length : 'mp') + ']' : '') + (WA_BTN ? ' [BTN ' + JSON.stringify(WA_BTN) + ']' : '') + (WA_LIST ? ' [LIST ' + WA_LIST.map(x => x.t).join(', ') + ']' : '') + (cb ? ' [ctxBtn ' + JSON.stringify(cb) + ']' : '')); };
+  ['bonjour', 'aide', 'stock pdf', 'ventes pdf octobre', 'sales pdf october 2026 vs september 2026', 'factures eskapet pdf', 'ruptures', 'eta pesco', 'solde eskapet', 'stock sucre', 'mettre à jour eta pesco 15/02', 'non', 'rappelle-moi vendredi paiement Eskapet', 'remind me tomorrow at 3pm call Polykrome', 'mes rappels'].forEach(T);
+  L.push('RUNOUT\n' + waRunoutText_(all)); const cur = waSnap_(all); waSnapSave_(cur); L.push('SNAP ' + JSON.stringify(cur).length);
+  L.push('SUMMARY\n' + waSummaryPlus_(all, u.access, waSnapGet_(0), cur).slice(0, 1500));
+  L.push('AGING TABS ' + waSheets_().filter(t => /^aging/i.test(t.n)).map(t => t.n).join(', '));
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID), sh = ss.getSheetByName('PPM'); L.push('PPM H ' + (sh ? sh.getRange(1, 1, 2, sh.getLastColumn()).getDisplayValues().map(r => r.join('|')).join(' // ') : 'no PPM: ' + ss.getSheets().map(x => x.getName()).join(',')));
+  const P = PropertiesService.getScriptProperties(); P.setProperty('WA_REM', JSON.stringify(JSON.parse(P.getProperty('WA_REM') || '[]').filter(r => !/eskapet|polykrome/i.test(r.w))));
+  Logger.log(L.join('\n\n')); }

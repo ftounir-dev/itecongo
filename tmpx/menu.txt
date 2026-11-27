@@ -1,0 +1,50 @@
+// ===== Menu v2: greeting card with live snapshot + grouped list with live figures =====
+const WA_DAYS = { fr: ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'], en: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] };
+const waCut_ = (s, n) => { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
+function waSnapLines_(all, acc) { const has = k => acc.indexOf(k) >= 0, L = [], t = waToday_();
+  if (has('banks')) { const B = waBanks_(all); if (B && B.odLim) { const pc = B.odUsed / B.odLim; L.push((pc >= 0.8 ? '🔴 ' : pc >= 0.6 ? '🟠 ' : '🟢 ') + T_('Découvert ', 'Overdraft ') + waPct_(pc)); } }
+  if (has('suppliers')) { const M = waMatured_(all); if (M.tot) L.push('🟠 ' + T_('Échu fournisseurs ', 'Overdue suppliers ') + waBig_(M.tot)); }
+  if (has('stock')) { const S = waStockLow_(all); L.push((S.some(x => x.act <= 0.05) ? '🔴 ' : S.length ? '🟠 ' : '🟢 ') + (S.length ? S.length + T_(' article(s) < 1 mois', ' item(s) under 1 month') : T_('Stock : rien sous 1 mois', 'Stock: nothing under 1 month'))); }
+  if (has('projects') || has('stock')) { const E = (has('projects') ? waEtas_(all, 1) : []).concat(has('stock') ? waStockEtas_(all, 1) : []); if (E.length) L.push('🟢 ' + E.length + T_(' arrivage(s) aujourd’hui et demain', ' arrival(s) today and tomorrow')); }
+  return L; }
+function waGreet_(u, acc) { const all = allData_(), d = new Date(), L = waSnapLines_(all, acc);
+  let at = ''; try { const f = all.fetchedAt ? new Date(all.fetchedAt) : null; if (f && !isNaN(f)) at = Utilities.formatDate(f, waTz_(), 'HH:mm'); } catch (e) {}
+  const first = String(u.name || '').split(' ')[0];
+  const body = T_('Bonjour ', 'Hello ') + first + ' 👋\n_' + WA_DAYS[WA_L === 'en' ? 'en' : 'fr'][d.getDay()] + ' ' + Utilities.formatDate(d, waTz_(), 'dd/MM') + (at ? T_(' · données de ', ' · data as of ') + at : '') + '_' +
+    (L.length ? '\n\n' + L.join('\n') : '') + '\n\n' + T_('Choisissez une rubrique ou posez votre question, par écrit ou en 🎤 vocal.', 'Pick a topic or ask your question, by text or 🎤 voice.');
+  WA_LIST = waMenuList_(acc, all); WA_TOPIC = 'menu'; return body; }
+function waMenuList_(acc, all) { all = all || allData_(); const has = k => acc.indexOf(k) >= 0, S = [];
+  const sec = (title, rows) => { rows = rows.filter(Boolean); if (rows.length) S.push({ title: title, rows: rows }); };
+  const r = (id, t, d) => ({ id: id, t: waCut_(t, 24), d: waCut_(d, 72) });
+  const B = has('banks') ? waBanks_(all) : null, M = has('suppliers') ? waMatured_(all) : null, nAl = waSnapLines_(all, acc).filter(x => /^🔴|^🟠/.test(x)).length;
+  sec(T_('Finance', 'Finance'), [
+    r('point', T_('Point du jour', 'Daily update'), (nAl ? nAl + T_(' alerte(s) · ', ' alert(s) · ') : T_('Tout est en ordre · ', 'All clear · ')) + T_('vue d’ensemble', 'overview')),
+    B && r('banques', T_('Banques', 'Banks'), T_('Position nette ', 'Net position ') + waBig_(B.net) + (B.odLim ? T_(' · découvert ', ' · overdraft ') + waPct_(B.odUsed / B.odLim) : '')),
+    M && r('fournisseurs', T_('Fournisseurs échus', 'Overdue suppliers'), waBig_(M.tot) + ' · ' + (M.all || M.top).slice(0, 3).map(x => x[0]).join(', '))]);
+  if (has('stock') || has('projects')) { const low = has('stock') ? waStockLow_(all) : [], ro = has('stock') ? waRunouts_(all, 1).filter(x => !x.nx || x.gap > 0).length : 0;
+    const E = (has('projects') ? waEtas_(all, 14) : []).concat(has('stock') ? waStockEtas_(all, 14) : []).sort((a, b) => a.d - b.d);
+    sec(T_('Stock et arrivages', 'Stock and arrivals'), [
+      has('stock') && r('stock', T_('Stock à surveiller', 'Stock to watch'), (low.length ? low.length + T_(' article(s) < 1 mois', ' item(s) < 1 month') : T_('Rien sous 1 mois', 'Nothing under 1 month')) + (ro ? T_(' · ' + ro + ' rupture(s) prévue(s)', ' · ' + ro + ' run-out(s) ahead') : '')),
+      r('eta', T_('Arrivages 14 jours', 'Arrivals 14 days'), E.length ? E.length + T_(' arrivée(s) · prochaine ', ' arrival(s) · next ') + waDay_(E[0].d) : T_('Aucune arrivée prévue', 'No arrival planned')),
+      has('stock') && r('stock pdf', 'Stock PDF', T_('Rapport complet avec barres et arrivages', 'Full report with bars and arrivals'))]); }
+  if (has('projects')) sec(T_('Projets', 'Projects'), [
+    r('projets', T_('Avancement projets', 'Project progress'), T_('Par famille · commandes en cours', 'By family · orders in progress')),
+    r('master plan', 'Master Plan PDF', T_('Calendrier ETD / ETA', 'ETD / ETA timeline'))]);
+  const K = has('fleet') ? waTanks_(all) : [];
+  sec(T_('Autres', 'Other'), [
+    has('fleet') && r('cuves', T_('Cuves gasoil', 'Fuel tanks'), K.length ? K.length + T_(' cuve(s) à vérifier', ' tank(s) to check') : T_('Niveaux et dernières saisies', 'Levels and latest entries')),
+    r('aide', T_('Alertes et aide', 'Alerts and help'), T_('Heures calmes, vocal, exemples de questions', 'Quiet hours, voice, example questions'))]);
+  let n = 0; S.forEach(s => { s.rows = s.rows.filter(() => n++ < 10); }); return S.filter(s => s.rows.length); }
+const waHelp_ = () => T_('❓ *Aide*\n\n*Questions*\n• « solde eskapet » · « eta pesco » · « stock sucre »\n• « ventes octobre 2026 » · « factures eskapet pdf »\n• Message vocal en français, anglais ou arabe 🎤\n\n*Alertes*\n• « alertes off » / « alertes on »\n• « pas d’alertes après 19h » · « silence 13h-15h »\n• « point off » · « alertes » pour voir vos réglages\n\n*Rappels*\n• « rappelle-moi vendredi paiement Eskapet » · « mes rappels »',
+  '❓ *Help*\n\n*Questions*\n• “eskapet balance” · “pesco eta” · “sugar stock”\n• “sales October 2026” · “eskapet invoices pdf”\n• Voice notes in French, English or Arabic 🎤\n\n*Alerts*\n• “alerts off” / “alerts on”\n• “no alerts after 7pm” · “quiet 1pm-3pm”\n• “summary off” · “alerts” to see your settings\n\n*Reminders*\n• “remind me Friday Eskapet payment” · “my reminders”');
+function waSendRich_(to, text, btns, list) { const c = waCfg_(), url = 'https://api.kapso.ai/meta/whatsapp/v24.0/' + c.phone + '/messages';
+  const post = body => UrlFetchApp.fetch(url, { method: 'post', contentType: 'application/json', headers: { 'X-API-Key': c.key }, muteHttpExceptions: true, payload: JSON.stringify(Object.assign({ messaging_product: 'whatsapp', recipient_type: 'individual', to: to }, body)) });
+  let body = String(text || ''), r0 = '';
+  if (body.length > 1000) { r0 = waSendTo_(to, body) + ' + '; body = T_('Et ensuite ?', 'What next?'); }
+  let res;
+  if (list) { const secs = list.length && list[0].rows ? list : [{ title: 'ITE Congo', rows: list }];
+    res = post({ type: 'interactive', interactive: { type: 'list', header: { type: 'text', text: 'ITE Congo · Business Platform' }, body: { text: body }, footer: { text: T_('Agent IA · ITE Congo', 'AI agent · ITE Congo') },
+      action: { button: T_('📋 Menu', '📋 Menu'), sections: secs.map(s => ({ title: waCut_(s.title, 24), rows: s.rows.map(x => ({ id: x.id, title: waCut_(x.t, 24), description: waCut_(x.d || '', 72) })) })) } } }); }
+  else res = post({ type: 'interactive', interactive: { type: 'button', body: { text: body }, action: { buttons: btns.slice(0, 3).map(b => ({ type: 'reply', reply: { id: b.id.slice(0, 250), title: waCut_(b.t, 20) } })) } } });
+  if (res.getResponseCode() >= 300 && !r0) { console.error('rich ' + res.getContentText().slice(0, 300)); return 'rich-fail ' + res.getResponseCode() + ' > ' + waSendTo_(to, text); }
+  return r0 + res.getResponseCode() + (res.getResponseCode() >= 300 ? ' ' + res.getContentText().slice(0, 200) : ''); }
